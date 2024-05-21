@@ -10,7 +10,7 @@ from itertools import chain
 
 
 HIDDEN_SIZE = 128
-BATCH_SIZE = 16
+BATCH_SIZE = 256
 PERCENTILE = 70
 
 
@@ -41,12 +41,15 @@ class Episode:
 
 def get_episode(env, get_action: Callable[[tuple], int]) -> Episode:
     episode = Episode()
+    gamma = 0.95
+    weight = 1.
     obs, _ = env.reset()
     while True:
         step = Step(obs=obs, action=get_action(obs))
         episode.steps.append(step)
         new_obs, reward, terminated, truncated, _ = env.step(step.action)
-        episode.total_discounted_reward += reward
+        episode.total_discounted_reward += reward * weight
+        weight *= gamma
         if terminated or truncated:
             break
         obs=new_obs
@@ -91,9 +94,10 @@ def training_loop(env, agent):
     objective = nn.CrossEntropyLoss()
     optimizer = optim.Adam(params=agent.parameters(), lr=0.01)
 
-    with SummaryWriter(comment="-cartpole") as writer:
+    with SummaryWriter(comment="-frozenlake") as writer:
+        elite_episodes = []
         for iter_no, batch in enumerate(batch_generator(env, agent)):
-            elite_episodes, reward_b, reward_m = filter_batch(batch)
+            elite_episodes, reward_b, reward_m = filter_batch(batch + [episode for episode in elite_episodes if episode.total_discounted_reward > 0])
             all_steps = (episode.steps for episode in elite_episodes)
             obs_v, acts_v = list(zip(
                 *((step.obs, step.action) for step in chain.from_iterable(all_steps))
@@ -112,13 +116,29 @@ def training_loop(env, agent):
             writer.add_scalar("loss", loss_v.item(), iter_no)
             writer.add_scalar("reward_bound", reward_b, iter_no)
             writer.add_scalar("reward_mean", reward_m, iter_no)
-            if reward_m > 199:
+            if reward_m > 0.5:
                 print("Solved!")
                 break
 
 
+class DiscreteOneHotWrapper(gym.ObservationWrapper):
+    def __init__(self, env):
+        super(DiscreteOneHotWrapper, self).__init__(env)
+        assert isinstance(env.observation_space, gym.spaces.Discrete)
+        shape = (env.observation_space.n, )
+        self.observation_space = gym.spaces.Box(
+            0.0, 1.0, shape, dtype=np.float32
+        )
+
+    def observation(self, observation):
+        res = np.copy(self.observation_space.low)
+        res[observation] = 1.0
+        return res
+
+
 if __name__ == "__main__":
-    env = gym.make('CartPole-v1') # v0?
+    env = gym.make('FrozenLake-v1') # v0 deprecated
+    env = DiscreteOneHotWrapper(env)
     obs_size: Final[int] = env.observation_space.shape[0]
     n_actions: Final[int] = env.action_space.n
     agent = Net(obs_size, HIDDEN_SIZE, n_actions)
