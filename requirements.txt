@@ -1,0 +1,6 @@
+tensorflow
+tensorboard
+tensorboardX
+
+gymnasium
+torch
