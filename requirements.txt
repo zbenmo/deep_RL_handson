@@ -2,5 +2,13 @@ tensorflow
 tensorboard
 tensorboardX
 
-gymnasium
+gymnasium[atari, all, accept-rom-license]
+swig
+Box2D
+box2d-kengz
+pygame
+ale_py
+autorom
+
 torch
+opencv-python
