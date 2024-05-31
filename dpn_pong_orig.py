@@ -93,6 +93,8 @@ class Agent:
         return done_reward
 
 
+loss = nn.MSELoss()
+
 def calc_loss(batch, net, tgt_net, device="cpu"):
     states, actions, rewards, dones, next_states = batch
 
@@ -113,7 +115,7 @@ def calc_loss(batch, net, tgt_net, device="cpu"):
 
     expected_state_action_values = next_state_values * GAMMA + \
                                    rewards_v
-    return nn.MSELoss()(state_action_values,
+    return loss(state_action_values,
                         expected_state_action_values)
 
 
